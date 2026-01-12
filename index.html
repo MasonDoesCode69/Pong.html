@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Pong vs. Mark the AI</title>
+    <style>
+        body {
+            background: #1a1a1a;
+            color: white;
+            font-family: 'Courier New', Courier, monospace;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+        }
+        #game-container { position: relative; border: 4px solid #fff; }
+        canvas { background: #000; display: block; }
+        #ui {
+            position: absolute;
+            top: -50px;
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            font-size: 24px;
+        }
+        #dialogue-box {
+            margin-top: 20px;
+            height: 50px;
+            text-align: center;
+            color: #0f0;
+            font-weight: bold;
+            width: 600px;
+        }
+        .controls { margin-top: 10px; color: #888; font-size: 14px; }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <div id="ui">
+            <span>PLAYER: <span id="pScore">0</span></span>
+            <span>MARK: <span id="mScore">0</span></span>
+        </div>
+        <canvas id="pong" width="800" height="400"></canvas>
+    </div>
+
+    <div id="dialogue-box">"Ready to lose, human?"</div>
+    <div class="controls">Move Mouse Up/Down to control your paddle.</div>
+
+<script>
+    const canvas = document.getElementById("pong");
+    const ctx = canvas.getContext("2d");
+    const dialogueBox = document.getElementById("dialogue-box");
+    const pScoreEl = document.getElementById("pScore");
+    const mScoreEl = document.getElementById("mScore");
+
+    let pScore = 0;
+    let mScore = 0;
+
+    const player = { x: 0, y: canvas.height/2 - 50, w: 10, h: 100, color: "#fff" };
+    const mark = { x: canvas.width - 10, y: canvas.height/2 - 50, w: 10, h: 100, color: "#f00" };
+    const ball = { x: canvas.width/2, y: canvas.height/2, r: 8, speed: 5, dx: 5, dy: 5, color: "#fff" };
+
+    const markQuotes = {
+        miss: ["My code... it's lagging!", "I let you have that one.", "Calculation error! Impossible!", "Stop cheating!", "Was that a solar flare?"],
+        score: ["Too easy.", "Is your mouse broken?", "I was programmed for chess, but this is fine.", "Are you even trying?", "Delete yourself."],
+        taunt: ["I can calculate 10 million moves. You can barely move a stick.", "Processing your defeat...", "Nice pixels you have there.", "You move like a dial-up modem."]
+    };
+
+    function say(type) {
+        const lines = markQuotes[type];
+        dialogueBox.innerText = `Mark: "${lines[Math.floor(Math.random() * lines.length)]}"`;
+    }
+
+    canvas.addEventListener("mousemove", (e) => {
+        let rect = canvas.getBoundingClientRect();
+        player.y = e.clientY - rect.top - player.h/2;
+    });
+
+    function resetBall() {
+        ball.x = canvas.width/2;
+        ball.y = canvas.height/2;
+        ball.dx = -ball.dx;
+        ball.speed = 5;
+    }
+
+    function drawRect(x, y, w, h, color) {
+        ctx.fillStyle = color;
+        ctx.fillRect(x, y, w, h);
+    }
+
+    function drawCircle(x, y, r, color) {
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI*2, false);
+        ctx.closePath();
+        ctx.fill();
+    }
+
+    function update() {
+        ball.x += ball.dx;
+        ball.y += ball.dy;
+
+        // Mark AI (Simple follow logic with a bit of delay/error)
+        let markTarget = ball.y - (mark.h/2);
+        mark.y += (markTarget - mark.y) * 0.1;
+
+        // Wall collisions
+        if(ball.y + ball.r > canvas.height || ball.y - ball.r < 0) {
+            ball.dy = -ball.dy;
+        }
+
+        // Paddle collisions
+        let paddle = (ball.x < canvas.width/2) ? player : mark;
+        if(collision(ball, paddle)) {
+            let collidePoint = (ball.y - (paddle.y + paddle.h/2));
+            collidePoint = collidePoint / (paddle.h/2);
+            let angleRad = (Math.PI/4) * collidePoint;
+            let direction = (ball.x < canvas.width/2) ? 1 : -1;
+            ball.dx = direction * ball.speed * Math.cos(angleRad);
+            ball.dy = ball.speed * Math.sin(angleRad);
+            ball.speed += 0.2;
+            
+            if(paddle === mark && Math.random() > 0.8) say("taunt");
+        }
+
+        // Score
+        if(ball.x - ball.r < 0) {
+            mScore++;
+            mScoreEl.innerText = mScore;
+            say("score");
+            resetBall();
+        } else if(ball.x + ball.r > canvas.width) {
+            pScore++;
+            pScoreEl.innerText = pScore;
+            say("miss");
+            resetBall();
+        }
+    }
+
+    function collision(b, p) {
+        p.top = p.y;
+        p.bottom = p.y + p.h;
+        p.left = p.x;
+        p.right = p.x + p.w;
+        b.top = b.y - b.r;
+        b.bottom = b.y + b.r;
+        b.left = b.x - b.r;
+        b.right = b.x + b.r;
+        return b.right > p.left && b.bottom > p.top && b.left < p.right && b.top < p.bottom;
+    }
+
+    function render() {
+        drawRect(0, 0, canvas.width, canvas.height, "#000");
+        drawRect(player.x, player.y, player.w, player.h, player.color);
+        drawRect(mark.x, mark.y, mark.w, mark.h, mark.color);
+        drawCircle(ball.x, ball.y, ball.r, ball.color);
+        
+        // Net
+        for(let i=0; i<canvas.height; i+=20) drawRect(canvas.width/2-1, i, 2, 10, "#333");
+    }
+
+    function game() {
+        update();
+        render();
+    }
+
+    setInterval(game, 1000/60);
+</script>
+</body>
+</html>
